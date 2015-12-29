@@ -6,6 +6,7 @@ import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
@@ -55,6 +56,7 @@ import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
+import javax.swing.WindowConstants;
 import javax.swing.border.EtchedBorder;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
@@ -70,7 +72,7 @@ public class MyPassManager extends JFrame {
 	private final JPanel content;
 	private final JMenuItem miSave;
 	private final JMenuItem miCopying;
-	private final FileNameExtensionFilter filter;
+	private final JFileChooser fd;
 	
 	private File file;
 	private String key;
@@ -80,33 +82,35 @@ public class MyPassManager extends JFrame {
 	
 	public MyPassManager() {
 		this.passwords = new HashMap<Integer, PasswordData>();
-		this.filter = new FileNameExtensionFilter("MyPassManager Files (*.pass)", "pass");
 		this.content = new JPanel();
 		this.content.setLayout(null);
 		
-		this.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+		this.fd = new JFileChooser();
+		this.fd.setFileFilter(new FileNameExtensionFilter("MyPassManager Files (*.pass)", "pass"));
+		
+		this.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 		this.addWindowListener(new WindowListener() {
 			@Override
 			public void windowClosing(WindowEvent e) {
 				if(MyPassManager.this.canDiscardChanges())
 					System.exit(0);
 			}
-
+			
 			@Override
 			public void windowActivated(WindowEvent e) {}
-
+			
 			@Override
 			public void windowClosed(WindowEvent e) {}
-
+			
 			@Override
 			public void windowDeactivated(WindowEvent e) {}
-
+			
 			@Override
 			public void windowDeiconified(WindowEvent e) {}
-
+			
 			@Override
 			public void windowIconified(WindowEvent e) {}
-
+			
 			@Override
 			public void windowOpened(WindowEvent e) {}
 		});
@@ -117,7 +121,7 @@ public class MyPassManager extends JFrame {
 		mb.add(mFile);
 		
 		JMenuItem miNew = new JMenuItem("New");
-		miNew.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N, KeyEvent.CTRL_MASK));
+		miNew.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N, InputEvent.CTRL_MASK));
 		miNew.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -127,7 +131,7 @@ public class MyPassManager extends JFrame {
 		mFile.add(miNew);
 		
 		JMenuItem miOpen = new JMenuItem("Open");
-		miOpen.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, KeyEvent.CTRL_MASK));
+		miOpen.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, InputEvent.CTRL_MASK));
 		miOpen.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -137,7 +141,7 @@ public class MyPassManager extends JFrame {
 		mFile.add(miOpen);
 		
 		this.miSave = new JMenuItem("Save");
-		this.miSave.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.CTRL_MASK));
+		this.miSave.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_MASK));
 		this.miSave.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -147,7 +151,7 @@ public class MyPassManager extends JFrame {
 		mFile.add(this.miSave);
 		
 		JMenuItem miSaveAs = new JMenuItem("Save As...");
-		miSaveAs.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, KeyEvent.CTRL_MASK | KeyEvent.ALT_MASK));
+		miSaveAs.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S, InputEvent.CTRL_MASK | InputEvent.ALT_MASK));
 		miSaveAs.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
@@ -165,7 +169,7 @@ public class MyPassManager extends JFrame {
 			}
 		});
 		mFile.add(miExit);
-
+		
 		JMenu mEdit = new JMenu("Edit");
 		mb.add(mEdit);
 		
@@ -235,11 +239,9 @@ public class MyPassManager extends JFrame {
 	}
 	
 	public void open() {
-		JFileChooser fd = new JFileChooser();
-		fd.setFileFilter(this.filter);
-		if(this.canDiscardChanges() && fd.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+		if(this.canDiscardChanges() && this.fd.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
 			try {
-				UserDefinedFileAttributeView att = Files.getFileAttributeView(fd.getSelectedFile().toPath(), UserDefinedFileAttributeView.class);
+				UserDefinedFileAttributeView att = Files.getFileAttributeView(this.fd.getSelectedFile().toPath(), UserDefinedFileAttributeView.class);
 				ByteBuffer b = ByteBuffer.allocate(1);
 				att.read("mpm.copying", b);
 				boolean copying = b.get(0) == 1;
@@ -247,13 +249,14 @@ public class MyPassManager extends JFrame {
 				b = ByteBuffer.allocate(att.size("mpm.mtime"));
 				att.read("mpm.mtime", b);
 				b.flip();
-				if(copying || Charset.defaultCharset().decode(b).toString().equals(Files.readAttributes(fd.getSelectedFile().toPath(), BasicFileAttributes.class).creationTime().toString())) {
+				if(copying || Charset.defaultCharset().decode(b).toString().equals(Files.readAttributes(this.fd.getSelectedFile().toPath(), BasicFileAttributes.class).creationTime().toString())) {
 					String key = MyPassManager.showPasswordDialog();
 					if(key != null) {
-						byte[] data = this.getData(key, MyPassManager.getFileContent(fd.getSelectedFile()), fd.getSelectedFile(), att);
+						byte[] data = this.getData(key, MyPassManager.getFileContent(this.fd.getSelectedFile()), this.fd.getSelectedFile(), att);
 						if(data != null) {
 							b = ByteBuffer.allocate(1);
 							att.read("mpm.attempts", b);
+							b.flip();
 							att.write("mpm.counter", b);
 							this.attempts = b.get(0);
 							
@@ -261,7 +264,7 @@ public class MyPassManager extends JFrame {
 							this.miCopying.setSelected(this.copying);
 							
 							this.key = key;
-							this.file = fd.getSelectedFile();
+							this.file = this.fd.getSelectedFile();
 							this.clear();
 							
 							ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(data));
@@ -283,30 +286,27 @@ public class MyPassManager extends JFrame {
 					}
 				}
 				else {
-					fd.getSelectedFile().delete();
+					this.fd.getSelectedFile().delete();
 					JOptionPane.showMessageDialog(this, "The file no longer exists!", "Error!", JOptionPane.ERROR_MESSAGE);
 				}
 			}
-			catch(NoSuchFileException ex) {
-				JOptionPane.showMessageDialog(this, "The file has a wrong format!", "Error!", JOptionPane.ERROR_MESSAGE);
-			}
-			catch(IOException ex) {
-				ex.printStackTrace();
-			}
-			catch(ClassNotFoundException ex) {
-				ex.printStackTrace();
-			}
+		catch(NoSuchFileException ex) {
+			JOptionPane.showMessageDialog(this, "The file has a wrong format!", "Error!", JOptionPane.ERROR_MESSAGE);
+		}
+		catch(IOException ex) {
+			ex.printStackTrace();
+		}
+		catch(ClassNotFoundException ex) {
+			ex.printStackTrace();
 		}
 	}
 	
 	public void save() {
-		JFileChooser fd = new JFileChooser();
-		fd.setFileFilter(this.filter);
-		if(fd.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+		if(this.fd.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
 			String key = MyPassManager.showPasswordDialog(this.key);
 			if(key != null) {
 				this.miSave.setEnabled(true);
-				this.save(this.key = key, this.file = fd.getSelectedFile().getAbsolutePath().endsWith(".pass") ? fd.getSelectedFile() : new File(fd.getSelectedFile().getAbsolutePath() + ".pass"));
+				this.save(this.key = key, this.file = this.fd.getSelectedFile().getAbsolutePath().endsWith(".pass") ? this.fd.getSelectedFile() : new File(this.fd.getSelectedFile().getAbsolutePath() + ".pass"));
 			}
 		}
 	}
@@ -368,12 +368,11 @@ public class MyPassManager extends JFrame {
 		int option = JOptionPane.NO_OPTION;
 		if(this.changed) {
 			option = JOptionPane.showConfirmDialog(this, "You have unsaved changes! Do you want to save the file?", "Save changes", JOptionPane.YES_NO_CANCEL_OPTION);
-			if(option == JOptionPane.OK_OPTION) {
+			if(option == JOptionPane.OK_OPTION)
 				if(this.file != null)
 					this.save(this.key, this.file);
 				else
 					this.save();
-			}
 		}
 		return option == JOptionPane.NO_OPTION;
 	}
@@ -436,10 +435,10 @@ public class MyPassManager extends JFrame {
 			c.init(mode, new SecretKeySpec(SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1").generateSecret(new PBEKeySpec(key.toCharArray(), salt, 16384, 128)).getEncoded(), "AES"), new IvParameterSpec(iv));
 			return c.doFinal(data);
 		}
-		catch (NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException | InvalidKeySpecException | InvalidAlgorithmParameterException ex) {
+		catch(NoSuchAlgorithmException | NoSuchPaddingException | InvalidKeyException | IllegalBlockSizeException | InvalidKeySpecException | InvalidAlgorithmParameterException ex) {
 			ex.printStackTrace();
 		}
-		catch (BadPaddingException ex) {
+		catch(BadPaddingException ex) {
 			JOptionPane.showMessageDialog(this, "Wrong password!");
 			
 			try {
@@ -457,13 +456,13 @@ public class MyPassManager extends JFrame {
 						att.write("mpm.counter", ByteBuffer.wrap(b));
 				}
 			}
-			catch (IOException ex2) {
+			catch(IOException ex2) {
 				ex2.printStackTrace();
 			}
 		}
 		return null;
 	}
-
+	
 	public static void main(String[] args) {
 		(MyPassManager.frame = new MyPassManager()).setVisible(true);
 	}
@@ -486,10 +485,10 @@ public class MyPassManager extends JFrame {
 			public void ancestorAdded(AncestorEvent e) {
 				name.requestFocusInWindow();
 			}
-
+			
 			@Override
 			public void ancestorMoved(AncestorEvent e) {}
-
+			
 			@Override
 			public void ancestorRemoved(AncestorEvent e) {}
 		});
@@ -504,16 +503,16 @@ public class MyPassManager extends JFrame {
 				c.setBackground(cl);
 				color.set(cl);
 			}
-
+			
 			@Override
 			public void mouseEntered(MouseEvent e) {}
-
+			
 			@Override
 			public void mouseExited(MouseEvent e) {}
-
+			
 			@Override
 			public void mousePressed(MouseEvent e) {}
-
+			
 			@Override
 			public void mouseReleased(MouseEvent e) {}
 		});
@@ -540,10 +539,10 @@ public class MyPassManager extends JFrame {
 			public void ancestorAdded(AncestorEvent e) {
 				pass.requestFocusInWindow();
 			}
-
+			
 			@Override
 			public void ancestorMoved(AncestorEvent e) {}
-
+			
 			@Override
 			public void ancestorRemoved(AncestorEvent e) {}
 		});
